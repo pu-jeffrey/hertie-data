@@ -1,0 +1,8 @@
+library(tidyverse)
+library(readxl)
+acled <- read_excel("Final Project/ACLED-Asia-Running-File-2016.xlsx")
+View(acled)
+summary(acled)
+str(acled)
+acled_hist <- ggplot(data = acled, mapping = aes(x = FATALITIES))
+acled_hist + geom_bar(mapping = aes(y = ..prop..))
