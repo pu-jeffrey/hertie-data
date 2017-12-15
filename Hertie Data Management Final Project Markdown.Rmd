@@ -2,30 +2,127 @@
 title: "Hertie Data Management Final Project"
 author: "Jeffrey Pu"
 date: "December 12, 2017"
-output: html_document
+output:
+  html_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(readxl)
-
+library(stringr)
+acled <- read_excel("Final Project/ACLED-Asia-Running-File-2016.xlsx")
 ```
 
 ## Dataset Selection
 
+For my final project, I decided to analyze the Armed Conflict Location & Event Data dataset for Asia in the year 2016. A very quick look at the summary of the data revealed something informative for my analysis moving forward.
 
-
-```{r cars}
-summary(cars)
+```{r}
+summary(acled)
 ```
 
-## Including Plots
+## Checking Fatalities
 
-You can also embed plots, for example:
+According to the summary, the vast number of conflict events in Asia in the year 2016 resulted in 0 fatalities, however, the range is quite large, maxing out at 93. To explore this further, I decided to focus specifically on cases that resulted in at least 1 fatality.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+acled_fatal <- acled %>% 
+  filter(FATALITIES > 0) %>% 
+  arrange(desc(FATALITIES))
+
+str(acled_fatal)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## Data Manipulation
+
+Now that I have chosen the subsection of the dataset that I want to work with, I work on getting rid of unnecessary columns, including those that are used for administrative data entry.
+
+```{r}
+acled_fatal2 <- acled_fatal %>% 
+  select(EVENT_DATE, EVENT_TYPE, ACTOR1, ALLY_ACTOR_1, INTER1, ACTOR2, ALLY_ACTOR_2, INTER2, INTERACTION, COUNTRY, LOCATION, FATALITIES)
+```
+
+I am also interested in looking at how the different seasons might affect the presence of fatal, armed conflict, so I transform the date column to reflect the season in which each particular incident took place.
+
+```{r}
+d <- as.Date(cut(as.Date(acled_fatal2$EVENT_DATE, "%m/%d/%Y"), "month")) + 32
+acled_fatal2$Season <- factor(quarters(d), levels = c("Q1", "Q2", "Q3", "Q4"), 
+   labels = c("winter", "spring", "summer", "fall"))
+
+acled_fatal3 <- acled_fatal2 %>% 
+  select(Season, EVENT_TYPE, ACTOR1, ALLY_ACTOR_1, INTER1, ACTOR2, ALLY_ACTOR_2, INTER2, INTERACTION, COUNTRY, LOCATION, FATALITIES)
+```
+
+## Exploratory Data Analysis
+
+Now that the data is prepared, I can do some exploratory data analysis in order to get an intuitive sense of what the big picture looks like with regards to fatal armed conflicts in Asia in 2016. I start by looking at how each country fares in terms of fatal conflicts.
+
+```{r}
+country_count <- acled_fatal3 %>% 
+  group_by(COUNTRY) %>% 
+  summarize(count = n())
+country_count
+```
+
+```{r}
+country_max <- acled_fatal3 %>% 
+  group_by(COUNTRY) %>% 
+  summarize(max = max(FATALITIES))
+country_max
+```
+
+```{r, echo=FALSE}
+fatalities <- ggplot(data = acled_fatal3, mapping = aes(x = FATALITIES))
+fatalities + geom_histogram() + facet_wrap(~ COUNTRY)
+```
+
+According to this graph, we see that India has by far the largest number of incidents that have resulted in at least 1 death, but Pakistan has a lot more deadlier cases.
+
+We can also see if there are any patterns in terms of what type of incidents generate more violence.
+
+```{r, echo=FALSE}
+fatalities <- ggplot(data = acled_fatal3, mapping = aes(x = FATALITIES))
+fatalities + geom_histogram() + facet_wrap(~ EVENT_TYPE)
+```
+
+According to this chart, we see that battles between armed groups represent the greatest number of incidences of fatal conflicts, however, the most fatal incidences unfortunately involve violence against civilians.
+
+Finally, let's see if there is a correlation between fatal incidents and seasons:
+
+```{r, echo=FALSE}
+fatalities <- ggplot(data = acled_fatal3, mapping = aes(x = FATALITIES))
+fatalities + geom_histogram() + facet_wrap(~ Season)
+```
+
+From here, it seems that incidences of fatal, armed conflict are pretty well-distributed throughout the year.
+
+## Data Analysis
+
+Now that we have a sense of what the data looks like, let's run a regression analysis to see if we can make any statistical inference with regards to the relationship between the factors we've looked at (country, incident type, and season) and the presence of fatal, armed conflict.
+
+```{r}
+acled_analysis <- lm(FATALITIES ~ COUNTRY + EVENT_TYPE + Season, data = acled_fatal3)
+summary(acled_analysis)
+```
+
+According to these summary statistics, it seems like the only statistically significant relationships involve fatalities that occur in Pakistan or Myanmar. These results are likely driven by the ongoing militant and terrorist violence that takes place in Pakistan, and the Rohingya conflict in Myanmar.
+
+However, if we take a look at the R-squared values, we can see that that the model has very little explanatory value. Suffice it to say that there are a lot of factors when it comes to predicting violent conflicts that are not represented in this model, and that understanding the driving forces behind what leads to violent, armed conflicts requires a much more sophisticated model than I am currently able to produce.
+
+```{r, echo=FALSE}
+acled_analysis %>% 
+  ggplot(aes(x = COUNTRY, y = FATALITIES)) + geom_point()
+```
+
+
+```{r, echo=FALSE}
+acled_analysis %>% 
+  ggplot(aes(x = EVENT_TYPE, y = FATALITIES, color = COUNTRY)) + geom_point()
+```
+
+```{r, echo=FALSE}
+acled_analysis %>% 
+  ggplot(aes(x = Season, y = FATALITIES, color = COUNTRY)) + geom_point()
+```
